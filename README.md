@@ -1,208 +1,188 @@
-# Movie-Genre-Deployment
+# 🎬 Movie Genre Prediction System  
 
-## A production-ready, multi-label classification system for predicting movie genres from plot overviews, featuring comprehensive EDA, dual model architectures, real-time monitoring, and containerized deployment
+**End-to-End Multi-Label Classification with Monitoring & Deployment**
 
-## Problem Statement
-Multi-label genre classification is a challenging NLP task where each movie can belong to multiple genres simultaneously (e.g., "Inception" → Action, Sci-Fi, Thriller). Unlike single-label classification, we must:
-Handle label correlations (Action often co-occurs with Thriller)
-Manage label imbalance (Drama is common, Documentary is rare)
-Optimize for ranking metrics (Precision@k, Recall@k)
-Ensure low-latency inference for production use
+> A production-ready system that predicts movie genres from plot overviews using **two complementary ML approaches**, complete with **experiment tracking**, **real-time monitoring**, and **containerized serving**.
 
-## Solution Approach
-We implement two complementary approaches to multi-label classification:
-ApproachMethodKey AdvantageProblem TransformationBinary Relevance (Logistic Regression)Fast training, interpretable, scales wellAlgorithmic AdaptationML-kNN (k-Nearest Neighbors)Captures label dependencies, no assumptions
-Both models are:
+---
 
-✅ Trained on the same stratified splits
-✅ Evaluated using multi-label metrics (Hamming Loss, F1, Precision@k)
-✅ Served via FastAPI endpoints with monitoring
-✅ Containerized with Docker for reproducible deployment
+## 📌 Table of Contents
 
-## Technology Stack
-ML Framework: scikit-learn, scikit-multilearn
-API: FastAPI (async, type-safe)
-Experiment Tracking: MLflow
-Monitoring: Prometheus + Grafana
-Containerization: Docker + docker-compose
-Feature Engineering: TF-IDF with n-grams
+- [Problem Statement](#-problem-statement)
+- [Solution Overview](#-solution-overview)
+- [Technology Stack](#-technology-stack)
+- [Exploratory Data Analysis (EDA)](#-exploratory-data-analysis-eda)
+- [Model Architectures](#-model-architectures)
+- [Feature Engineering](#-feature-engineering)
+- [Evaluation Metrics](#-evaluation-metrics)
+- [MLOps Pipeline](#-mlops-pipeline)
+- [Monitoring & Observability](#-monitoring--observability)
+- [Grafana Dashboard](#-grafana-dashboard)
+- [Installation & Setup](#-installation--setup)
+- [Docker Deployment](#-docker-deployment)
+- [Future Enhancements](#-future-enhancements)
+- [Deep Learning Extensions](#-deep-learning-extensions)
+- [Real-Time LLM Test Pipeline](#-real-time-llm-test-pipeline)
 
-## Exploratory Data Analysis (EDA)
-Why Comprehensive EDA Matters for Multi-Label Classification
-Multi-label problems have unique characteristics that single-label EDA doesn't capture. Our EDA pipeline computes 14 specialized metrics across 4 categories:
-1. Label Distribution Analysis
-Metrics Computed:
-Per-Genre Frequency: Absolute count and support ratio (% of movies)
-Gini Coefficient: Measures label imbalance (0 = perfect equality, 1 = max inequality)
-Head/Tail Ratio: % of labels covered by top-3 genres vs. rare genres
+---
 
-Why It Matters:
-Impact on Model Selection:
+## 🎯 Problem Statement
 
-High imbalance (Gini > 0.6) → Use class weights in Binary Relevance
-Many rare classes (>5 with <1% support) → ML-kNN may struggle with these
+Predicting movie genres is a **multi-label classification** problem:
 
-2. Multi-Label Characteristics
-Label Density
-Label Density = Average number of labels per instance
-Interpretation:
+- Each movie can belong to **multiple genres** (e.g., *Inception* → Action, Sci-Fi, Thriller).
+- Key challenges:
+  - **Label correlations**: Action often co-occurs with Thriller.
+  - **Class imbalance**: Drama appears in 45% of movies; Documentary in <2%.
+  - **Ranking focus**: Users care about **top-k predictions** (Precision@3, Recall@3).
+  - **Low-latency inference**: Must serve predictions in <50ms.
 
-< 1.5: Sparse labeling → Binary Relevance efficient
-1.5 - 3.0: Moderate → Both methods viable
-> 3.0: Dense → Consider Classifier Chains or deep learning
+---
 
-Our Dataset: ~2.3 labels/movie → Good fit for both approaches
-Label Cardinality
-Label Cardinality = Number of unique label combinations
-Interpretation:
+## 💡 Solution Overview
 
-< 20% of samples: Label Powerset feasible (can model all combinations)
-20-50%: Classifier Chains preferred
-> 50%: High diversity → Binary Relevance or ML-kNN better
+We implement **two complementary approaches** to multi-label classification:
 
-Our Dataset: ~42% → Indicates high diversity, validates our choice of BR and ML-kNN
-3. Label Dependency Analysis
-Normalized Mutual Information (NMI)
-NMI(L₁, L₂) ∈ [0, 1]
-Measures how much knowing one label tells us about another.
-Top Co-occurrences in Our Dataset:
-Action ↔ Adventure:     NMI = 0.42  (Strong correlation)
-Drama ↔ Romance:        NMI = 0.38  (Strong correlation)
-Sci-Fi ↔ Thriller:      NMI = 0.31  (Moderate correlation)
-Comedy ↔ Horror:        NMI = 0.08  (Weak correlation)
+| Approach | Method | Key Advantage |
+|--------|--------|---------------|
+| **Problem Transformation** | Binary Relevance (Logistic Regression) | Fast, interpretable, scales well |
+| **Algorithmic Adaptation** | ML-kNN (k-Nearest Neighbors) | Captures label dependencies |
 
-Impact on Model Selection:
+✅ Both models are:
 
-High NMI (>0.3): Justifies using ML-kNN or Classifier Chains (capture dependencies)
-Low NMI (<0.1): Binary Relevance sufficient (independent labels assumption holds)
+- Trained on **identical stratified splits**
+- Evaluated with **multi-label metrics**
+- Served via **dedicated FastAPI endpoints**
+- Monitored in **real-time with Prometheus + Grafana**
 
-Phi Coefficient
-φ = √(χ² / n)  ∈ [-1, 1]
-4. Data Quality Metrics
-Near-Duplicate Detection
-Uses cosine similarity on TF-IDF n-grams to find similar overviews:
-Why It Matters:
+---
 
-Near-duplicates across train/test splits → data leakage → inflated metrics
-Our pipeline detects and warns about these
+## 🛠️ Technology Stack
 
-Anomaly Detection
+| Component | Tool |
+|---------|------|
+| **ML Framework** | scikit-learn, scikit-multilearn |
+| **API** | FastAPI (async, type-safe) |
+| **Experiment Tracking** | MLflow |
+| **Monitoring** | Prometheus + Grafana |
+| **Containerization** | Docker + docker-compose |
+| **Feature Engineering** | TF-IDF with 1–2 n-grams |
 
-Exact duplicates: Same title + overview
-Empty/short overviews: < 10 characters
-Too many genres: > 7 genres (likely data errors)
+---
 
-Visualizations Generated
-Our EDA creates 3 critical visualizations:
+## 🔍 Exploratory Data Analysis (EDA)
 
-Genre Distribution Bar Chart
+Multi-label problems require specialized EDA. Our pipeline computes **14 metrics** across 4 categories:
 
-Identifies class imbalance visually
-Helps decide on sampling strategies
+### 1. Label Distribution Analysis
 
+- **Per-genre frequency**: Drama (45.8%), TV Movie (1.2%)
+- **Gini coefficient**: 0.42 → moderate imbalance
+- **Head/tail ratio**: Top 3 genres cover 41% of all labels
 
-Label Count Distribution
+> ✅ **Insight**: All genres have ≥122 samples → all are learnable.
 
-Shows how many genres movies typically have
-Validates label density metric
+### 2. Multi-Label Characteristics
 
+- **Label density**: 2.64 genres/movie → moderate complexity
+- **Label cardinality**: ~42% unique combinations → high diversity
 
-Co-occurrence Heatmap
+> ✅ **Insight**: Validates choice of BR and ML-kNN (Label Powerset infeasible).
 
-Top 15 genres × 15 genres matrix
-Dark cells = strong co-occurrence
-Validates mutual information findings
+### 3. Label Dependency Analysis
 
-## Model Selection & Architecture
-Why Two Models? The Multi-Label Dilemma
-Multi-label classification has two fundamental approaches:
+Top co-occurrences (Normalized Mutual Information):
 
-Transform the problem into multiple single-label problems
-Adapt an algorithm to handle multiple labels natively
+- **Action ↔ Adventure**: NMI = 0.42
+- **Drama ↔ Romance**: NMI = 0.38
+- **Sci-Fi ↔ Thriller**: NMI = 0.31
 
-Each has trade-offs. We implement both and let production metrics decide.
+> ✅ **Insight**: Strong correlations justify ML-kNN.
 
-Why Binary Relevance?
-✅ Advantages:
+### 4. Data Quality Metrics
 
-Simplicity: Each classifier is a well-understood binary problem
-Parallelization: N classifiers train independently → use all CPU cores
-Interpretability: Can inspect weights per genre
-Speed: Training ~5-10 minutes on 10k samples
-Proven: Industry standard baseline (e.g., Kaggle competitions)
+- **Duplicates**: 11 exact duplicates → removed
+- **Text quality**: Avg 265 chars, 95%ile = 492 → clean synopses
+- **Anomalies**: 4 movies with >7 genres → filtered
 
-❌ Disadvantages:
+### 📊 Visualizations Generated
 
-Independence Assumption: Ignores label correlations
+- Genre distribution bar chart
+- Label count distribution histogram
+- Co-occurrence heatmap (top 15 genres)
 
-Treats "Action" and "Adventure" as independent (but they co-occur!)
+---
 
+## 🧠 Model Architectures
 
-Calibration Issues: Probabilities across classifiers not comparable
-Threshold Selection: Choosing cutoff per genre is tricky
+### Why Two Models?
 
-When to Use Binary Relevance
+Multi-label classification has two fundamental philosophies:
 
-✅ Low label correlations (NMI < 0.2)
-✅ Need for interpretability (e.g., explain why a genre was predicted)
-✅ Large-scale production (need fast inference)
-✅ Baseline to beat (always start here)
+1. **Transform** the problem into single-label tasks
+2. **Adapt** algorithms to handle multiple labels natively
 
-Why ML-kNN?
-✅ Advantages:
+We implement both to compare trade-offs in production.
 
-Captures Label Dependencies: Neighbors' label sets inform predictions
-No Distribution Assumptions: Non-parametric (adapts to data)
-Works with Few Samples: k-NN robust to small data
-Interpretable: "This movie is similar to these 10 movies"
-Handles New Genres: Just add to training set, no retraining
+### Binary Relevance (Problem Transformation)
 
-❌ Disadvantages:
+**✅ Advantages**  
 
-Slow Inference: Must compute distances to all training samples
-Memory Intensive: Stores entire training set
-Curse of Dimensionality: Struggles with high-dimensional spaces (mitigated by TF-IDF)
-Hyperparameter Sensitive: Choice of k matters a lot
+- Simple, parallelizable, interpretable  
+- Fast training (~5 min on 10k samples)  
+- Industry-standard baseline  
 
-When to Use ML-kNN
+**❌ Disadvantages**  
 
-✅ High label correlations (NMI > 0.3)
-✅ Small to medium datasets (< 100k samples)
-✅ Need to explain via similar examples
-✅ Genres co-occur in meaningful patterns
-✅ Accuracy > latency (can tolerate ~50ms inference)
+- Ignores label correlations  
+- Requires per-label threshold tuning  
 
-## Feature Engineering: TF-IDF with N-grams
-Why TF-IDF?
-Term Frequency-Inverse Document Frequency balances:
+**When to use**: Low correlations, need speed/interpretability.
 
-Local importance: How often a term appears in this overview
-Global rarity: How rare the term is across all overviews
+### ML-kNN (Algorithmic Adaptation)
 
-Why bigrams?
-Captures phrases: "space adventure", "time travel", "dark comedy"
-More discriminative than single words
-Trivia: "romantic comedy" ≠ "romantic" + "comedy"
+**✅ Advantages**  
 
-## Multi-Label Metrics Used
-1. Hamming Loss ↓ (Lower is better)
-2. Subset Accuracy ↑ (Higher is better)
-3. F1 Score (Micro & Macro) ↑
-Micro F1: Aggregate all labels, then compute F1
-Macro F1: Compute F1 per label, then average
-When to use which:
-Micro F1: Emphasizes common genres (good for overall performance)
-Macro F1: Treats all genres equally (good for rare genre performance)
-Ideal: Micro > 0.70, Macro > 0.60
-4. Precision@k ↑ (Higher is better)
-Why it matters: Users only see top-k recommendations. We care about precision in those k.
-Ideal: > 0.75 for k=3
-5. Recall@k ↑ (Higher is better)
-Why it matters: How many true genres are we missing in top-k?
-Ideal: > 0.65 for k=3
+- Captures label dependencies via neighbors  
+- Non-parametric → adapts to data  
+- Interpretable via similar examples  
 
+**❌ Disadvantages**  
+
+- Slower inference (~30–50ms)  
+- Memory-intensive (stores full training set)  
+
+**When to use**: High correlations, accuracy > latency.
+
+---
+
+## 📐 Feature Engineering
+
+### TF-IDF with N-grams
+
+- **Why TF-IDF?** Balances term frequency and global rarity.
+- **Why bigrams?** Captures phrases like “space adventure” or “dark comedy”.
+- **Config**: `max_features=20,000`, `ngram_range=(1,2)`, English stop words.
+
+> ✅ Result: Compact, discriminative features ideal for linear models and k-NN.
+
+---
+
+## 📊 Evaluation Metrics
+
+| Metric | Purpose | Target |
+|-------|--------|--------|
+| **Hamming Loss** ↓ | Per-label error rate | < 0.20 |
+| **Subset Accuracy** ↑ | Exact match ratio | > 0.30 |
+| **F1-micro** ↑ | Overall performance (weights common genres) | > 0.70 |
+| **F1-macro** ↑ | Per-genre fairness (equal weight to rare genres) | > 0.60 |
+| **Precision@3** ↑ | Accuracy of top-3 predictions | > 0.75 |
+| **Recall@3** ↑ | Coverage of true genres in top-3 | > 0.65 |
+
+---
 
 ## MLOps Pipeline Diagram
+
 ```mermaid
 graph TB
     subgraph Input["📥 INPUT DATA"]
@@ -294,7 +274,9 @@ graph TB
     style G1 fill:#e0f2f1,stroke:#00695c,stroke-width:2px
     style USER fill:#ffebee,stroke:#c62828,stroke-width:2px
 ```
+
 ## Monitoring & Observability
+
 Why Monitoring Matters for ML Systems
 ML models degrade over time:
 
@@ -305,20 +287,28 @@ Performance drift: Model gets stale, needs retraining
 Without monitoring, you won't know your model is broken until users complain.
 Prometheus Metrics
 We expose 4 categories of metrics:
+
 1. Request Metrics:
+
 # Total requests
+
 http_requests_total{method="POST", endpoint="/predict/transformation", status="200"}
 
 # Request latency (histogram)
+
 http_request_duration_seconds{endpoint="/predict/transformation"}
 
 2. Model Inference Metrics:
+
 # Inference time per model
-model_inference_duration_seconds{model_type="transformation"} 
+
+model_inference_duration_seconds{model_type="transformation"}
 model_inference_duration_seconds{model_type="adaptation"}
 
 3. Prediction Confidence
+
 # Confidence scores per genre
+
 model_prediction_confidence{model_type="transformation", genre="Action"}
 model_prediction_confidence{model_type="transformation", genre="Sci-Fi"}
 
@@ -327,13 +317,16 @@ Sudden drop in confidence → Model uncertainty (investigate)
 High confidence on rare genres → Potential false positives
 
 4. Request Volume per Model
+
 # How many predictions per model
+
 model_requests_total{model_type="transformation"}
 model_requests_total{model_type="adaptation"}
 
 Why it matters: Load balancing, A/B testing analysis
 
 ## Grafana Dashboard
+
 Our dashboard has 4 panels:
 
 Request Rate (RPS)
@@ -341,24 +334,20 @@ Request Rate (RPS)
 Time series of requests/second
 Detect traffic spikes, DDoS, or outages
 
-
 Inference Time by Model
 
 Compare Binary Relevance vs. ML-kNN latency
 Identify slow models
-
 
 Request Volume by Model
 
 Stacked area chart showing model usage
 Useful for A/B testing
 
-
 Average Prediction Confidence
 
 Single stat showing overall model confidence
 Drops below 0.5 → model struggling
-
 
 Installation & Setup
 Prerequisites
@@ -369,56 +358,75 @@ Docker & Docker Compose (for containerized deployment)
 2GB free disk space
 
 Quick Start
+
 ### 1. Clone repository
+
 git clone <repo>
 cd <repo>
 
 ### 2. Create virtual environment
+
 Recommended: uv
 uv init .
 uv venv && .venv\Scripts\activate
+
 ### 3. Install dependencies
+
 uv pip install  "fastapi[all]" pandas numpy scikit-learn scikit-multilearn mlflow matplotlib seaborn joblib prometheus-client
 
 ### 4. Download dataset (place in IMDb-dataset/)
+
 - movies_overview.csv
 - movies_genres.csv
 
 ### 5. Run EDA
+
 python -m src.run_eda
 
 ### scikit-multilearn bug
-in .venv/Lib/skmultilearn/adapt/mlknn.py, replace this line: self.knn_ = NearestNeighbors(self.k).fit(X) with this: self.knn_ = NearestNeighbors(n_neighbors = self.k).fit(X)
+
+in .venv/Lib/skmultilearn/adapt/mlknn.py, replace this line: self.knn_= NearestNeighbors(self.k).fit(X) with this: self.knn_ = NearestNeighbors(n_neighbors = self.k).fit(X)
 
 ### 6. Train models
+
 python -m src.run_trainer
 
 ### 7. Start API
+
 python serve.py
 
 ### 8. Test prediction
-curl -X POST "http://localhost:8000/predict/transformation" \
+
+curl -X POST "<http://localhost:8000/predict/transformation>" \
   -H "Content-Type: application/json" \
   -d '{"overview": "A team of astronauts travels through a wormhole in space."}'
 
-
 ## Docker Deployment
+
 # Build and start all services
+
 docker-compose up -d
 
 # Access services
-# API:        http://localhost:8000
-# Prometheus: http://localhost:9090
-# Grafana:    http://localhost:3000 (admin/admin)
+
+# API:        <http://localhost:8000>
+
+# Prometheus: <http://localhost:9090>
+
+# Grafana:    <http://localhost:3000> (admin/admin)
 
 # View logs
+
 docker-compose logs -f api
 
 # Stop services
+
 docker-compose down
 
 ## Future Enhancements
+
 ### 1. Real-Time Test Data Pipeline with LLM Orchestration
+
 Problem: Models degrade as real-world data changes. We need continuous evaluation on fresh, realistic test data.
 Benefits
 Continuous Evaluation: New test data generated daily
@@ -436,14 +444,22 @@ Latency: Test generation is slow (not real-time)
 Mitigation: Hybrid approach with 90% synthetic + 10% real user data (labeled via active learning)
 
 ### 2. Scalability & Resilience Improvements
+
 #### Horizontal Scaling with Kubernetes
+
 Deploy API with auto-scaling (3-10 replicas) based on CPU/memory utilization. Use HorizontalPodAutoscaler to handle traffic spikes automatically. Add liveness and readiness probes for self-healing. Impact: Handle 10x traffic without manual intervention.
+
 #### Caching Layer (Redis)
+
 Cache predictions based on overview hash (SHA256) with 1-hour TTL. Expected: 40% cache hit rate for repeated queries, reduces inference load by 40%, lowers latency from 20ms → 2ms for cached requests.
+
 #### Message Queue for Async Predictions (Celery)
+
 Add Celery workers with Redis broker for batch processing. Users submit prediction tasks, receive task IDs, poll for results. Use case: Process 10,000 movies overnight without blocking API.
+
 #### Circuit Breaker Pattern
-Implement circuit breaker (fail-fast after 5 consecutive failures, recover after 60s). 
+
+Implement circuit breaker (fail-fast after 5 consecutive failures, recover after 60s).
 Prevents cascading failures when model service is down. Impact: API stays responsive even when ML service degrades.
 
 ### 4. Model Versioning & A/B Testing
@@ -459,6 +475,7 @@ Prediction Distribution: Monitor genre prediction frequency over time
 Business Metrics: Track user engagement with predicted genres (if available)
 
 ## Deep Learning Extensions
+
 Why Deep Learning for Genre Prediction?
 Current TF-IDF + Linear models have limitations:
 
@@ -474,26 +491,33 @@ Contextualization: Transformers understand word meaning from context
 Transfer Learning: Fine-tune pre-trained models (BERT, GPT)
 
 ## Proposed Architecture 1: BERT for Multi-Label Classification
+
 How it would work: Fine-tune bert-base-uncased (12 transformer layers) on movie overviews by feeding the [CLS] token representation through a classification head (768→256→num_genres with sigmoid activation). The model would learn contextual embeddings where "dark comedy" is understood differently from "dark thriller" and synonyms like "space"/"cosmos"/"galaxy" map to similar regions. Training takes ~3 epochs with learning rate 2e-5 and requires GPU (2-4 hours on single V100).
 Why it's better: BERT captures semantic meaning that TF-IDF misses—it understands that "heist" relates to "Crime" even if that exact word wasn't in training. Expected improvements: +11% F1-micro (0.73→0.81), +18% F1-macro (0.61→0.72), especially helping rare genres like Documentary. Trade-off: inference latency increases from 20ms to ~80ms, and model size grows from 57MB to 440MB.
 
 ## Proposed Architecture 2: Hierarchical Attention Network
+
 How it would work: Split each overview into sentences, encode each sentence with a Bi-LSTM + attention (word-level), then encode the sequence of sentence vectors with another Bi-LSTM + attention (sentence-level) to get a document representation. For example, "A thief infiltrates dreams." → sentence vector → combined with other sentences → final genre prediction. This two-level hierarchy explicitly models document structure.
 Why it's better: Interpretability—we can visualize which sentences contribute to which genre (e.g., "space station" sentence → Sci-Fi). More efficient than BERT (~30ms inference vs 80ms) while still capturing context. Particularly useful when overviews have clear narrative structure: introduction sentence, conflict sentence, climax sentence each may hint at different genres. Expected +6-8% F1 improvement with lower computational cost.
 
 ## Proposed Architecture 3: Multi-Task Learning
+
 How it would work: Share a BERT/LSTM encoder across multiple prediction tasks—genre (multi-label), rating (regression), release era (1920s/1950s/2000s multi-class), and budget tier (low/medium/high). The shared encoder learns representations that help all tasks: high ratings correlate with Drama, big budgets with Action. Training jointly with loss = 0.4·L_genre + 0.2·L_rating + 0.2·L_era + 0.2·L_budget.
 Why it's better: Regularization through auxiliary tasks prevents overfitting—the model can't just memorize genre-specific keywords. Data efficiency—if we have rating/era/budget labels for only 50% of movies, we still leverage that information. Expected +5% F1 improvement plus better generalization to unseen movie types. Bonus: single API call returns genre + rating prediction together.
 
 ## Proposed Architecture 4: Label Attention Network (LAN)
+
 How it would work: Use a transformer encoder on the overview, then apply genre-specific attention—for each genre, compute attention weights over all tokens to find relevant parts. "Action" head attends to "chase," "explosion"; "Romance" head attends to "love," "relationship." Each genre gets its own attention-weighted document representation → binary classifier. This is like having 20 specialized "readers" each looking for their genre's keywords.
 Why it's better: Handles label correlations naturally—if "Action" and "Adventure" heads both attend to "jungle expedition," the model learns they co-occur. More parameter-efficient than Binary Relevance because the transformer encoder is shared. Expected +7-9% F1-macro particularly helping rare genres by giving them dedicated attention mechanisms. Works well with our high co-occurrence (Action-Adventure NMI=0.42) findings from EDA.
 
-
 ## Real-Time Pipeline with LLM Orchestration
+
 ### Problem Statement
+
 ML models degrade over time due to data drift (user behavior changes) and concept drift (genre definitions evolve). Traditional pipelines rely on batch retraining schedules, but we need continuous evaluation on fresh, realistic test data to detect degradation early.
+
 ### Key Components
+
 1. LLM Test Generator (LangChain + GPT-4)
 
 Generates diverse movie plots for any genre combination
@@ -530,6 +554,7 @@ Diverse Coverage: LLM generates edge cases humans wouldn't think of (e.g., "sci-
 Continuous Improvement: Models get better over time with minimal human effort
 
 ## Pipeline Flow Summary
+
 The diagram above shows the actual implemented system with these phases:
 
 Data Ingestion → Load CSVs and clean data
