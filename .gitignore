@@ -1,6 +1,10 @@
 __pycache__
+.venv
+.env
+src/__pycache__
 artifacts/binary_relevance_model.pkl
 artifacts/mlknn_model.pkl
 artifacts/tfidf_vectorizer_mlknn.pkl
 artifacts/tfidf_vectorizer.pkl
 .python-version
+mlflow
