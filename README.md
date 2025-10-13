@@ -205,73 +205,91 @@ Ideal: > 0.65 for k=3
 ## MLOps Pipeline Diagram
 ```mermaid
 graph TB
-    subgraph Data["🗂️ Data Layer"]
-        DS[("📊 IMDb Dataset<br/>movies_overview.csv<br/>movies_genres.csv")]
-        DS --> LOAD[/"📥 Data Loader<br/>parse_genre_ids()<br/>load_and_clean_data()"/]
+    subgraph Input["📥 INPUT DATA"]
+        DS1["movies_overview.csv<br/>(title, overview, genre_ids)"]
+        DS2["movies_genres.csv<br/>(id, name)"]
     end
 
-    subgraph EDA["🔬 Exploratory Data Analysis"]
-        LOAD --> EDA1["📈 Basic Stats<br/>• Genre frequency<br/>• Text length<br/>• Label counts"]
-        LOAD --> EDA2["🔢 Multi-Label Metrics<br/>• Label Density<br/>• Cardinality<br/>• Gini coefficient"]
-        LOAD --> EDA3["🔗 Dependency Analysis<br/>• Mutual Information<br/>• Phi Correlation<br/>• Co-occurrence"]
-        LOAD --> EDA4["🖼️ Visualizations<br/>• Bar charts<br/>• Heatmaps<br/>• Distributions"]
+    subgraph DataProcessing["🔧 DATA PROCESSING"]
+        DS1 & DS2 --> DL["data_loader.py<br/>load_and_clean_data()<br/>• Parse genre_ids<br/>• Filter valid movies<br/>• Remove duplicates"]
+        DL --> DF[("Cleaned DataFrame<br/>~10k movies")]
+    end
+
+    subgraph EDA["📊 EXPLORATORY DATA ANALYSIS"]
+        DF --> E1["run_eda.py<br/>compute metrics"]
+        E1 --> E2["Label Density: 2.3<br/>Cardinality: 42%<br/>Gini: 0.58"]
+        E1 --> E3["Mutual Information<br/>Co-occurrence Matrix<br/>Near-duplicates"]
+        E1 --> E4["Visualizations<br/>• genre_distribution.png<br/>• co_occurrence_heatmap.png<br/>• label_count_distribution.png"]
+        E2 & E3 & E4 --> E5[("artifacts/eda_report.json<br/>artifacts/eda_plots/")]
+    end
+
+    subgraph Training["🎯 MODEL TRAINING"]
+        DF --> T1["features.py<br/>create_label_matrix()<br/>vectorize_text()"]
+        T1 --> T2["TF-IDF Features<br/>20k features, 1-2 grams<br/>Train/Val Split 80/20"]
         
-        EDA1 & EDA2 & EDA3 & EDA4 --> EDAREP[/"📄 EDA Report<br/>eda_report.json<br/>+ plots/"/]
-    end
-
-    subgraph FE["⚙️ Feature Engineering"]
-        EDAREP --> SPLIT["🔀 Stratified Split<br/>iterative_train_test_split()<br/>80% train / 20% val"]
-        SPLIT --> TFIDF["📝 TF-IDF Vectorization<br/>• max_features=20k<br/>• ngrams=(1,2)<br/>• sublinear_tf=True"]
-        TFIDF --> FEATS[("🎯 Features<br/>X_train, X_val<br/>(n × 20000)")]
-    end
-
-    subgraph ML["🤖 Model Training"]
-        FEATS --> BR["🎲 Binary Relevance<br/>LogisticRegression × N<br/>• C=1.0<br/>• solver=liblinear"]
-        FEATS --> MLKNN["🎯 ML-kNN<br/>Bayesian k-NN<br/>• k=10<br/>• s=1.0"]
+        T2 --> T3["bin_relevance_lr.py<br/>train_binary_relevance()"]
+        T2 --> T4["multi_label_knn.py<br/>train_ml_knn()"]
         
-        BR --> BRMET["📊 BR Metrics<br/>• Hamming: 0.18<br/>• F1-micro: 0.73<br/>• P@3: 0.78"]
-        MLKNN --> MLKMET["📊 ML-kNN Metrics<br/>• Hamming: 0.21<br/>• F1-macro: 0.64<br/>• R@3: 0.71"]
+        T3 --> M1["Binary Relevance Model<br/>LogisticRegression × 20<br/>C=1.0, liblinear"]
+        T4 --> M2["ML-kNN Model<br/>k=10, s=1.0<br/>Bayesian inference"]
         
-        BRMET & MLKMET --> MLFLOW[("📦 MLflow<br/>Experiment Tracking<br/>Model Registry")]
-    end
-
-    subgraph SERVE["🚀 Model Serving"]
-        MLFLOW --> API["🌐 FastAPI<br/>• /predict/transformation<br/>• /predict/adaptation<br/>• async endpoints"]
-        API --> CACHE["💾 Redis Cache<br/>• Hash overviews<br/>• TTL=1h<br/>• 40% hit rate"]
-        API --> LB["⚖️ Load Balancer<br/>Round-robin<br/>Health checks"]
-    end
-
-    subgraph MONITOR["📊 Monitoring & Observability"]
-        API --> PROM["📈 Prometheus<br/>• Request rate<br/>• Inference time<br/>• Confidence scores"]
-        PROM --> GRAF["📊 Grafana<br/>• Real-time dashboards<br/>• Alerting<br/>• Visualization"]
-        PROM --> ALERT["🚨 Alertmanager<br/>• High error rate<br/>• Slow inference<br/>• Low confidence"]
-    end
-
-    subgraph DEPLOY["🐳 Deployment"]
-        LB --> DOCKER["🐳 Docker<br/>• Multi-stage build<br/>• Non-root user<br/>• Health checks"]
-        DOCKER --> K8S["☸️ Kubernetes<br/>• 3-10 replicas<br/>• HPA (CPU/Memory)<br/>• Rolling updates"]
-    end
-
-    subgraph FEEDBACK["🔄 Continuous Improvement"]
-        GRAF --> DRIFT["📉 Drift Detection<br/>• Compare metrics<br/>• Track confidence<br/>• Monitor data dist"]
-        DRIFT --> RETRAIN{"🔄 Retrain?<br/>IF perf drops >5%"}
-        RETRAIN -->|Yes| LOAD
-        RETRAIN -->|No| MONITOR
+        M1 & M2 --> ML["MLflow Tracking<br/>• Log metrics<br/>• Log params<br/>• Log artifacts"]
         
-        ALERT --> ONCALL["📞 On-Call Engineer<br/>• Investigate<br/>• Rollback if needed"]
+        M1 --> A1[("artifacts/<br/>binary_relevance_model.pkl<br/>tfidf_vectorizer.pkl<br/>genre_names.txt")]
+        M2 --> A2[("artifacts/<br/>mlknn_model.pkl<br/>tfidf_vectorizer_mlkn.pkl<br/>genre_names_mlkn.txt")]
     end
 
-    subgraph FUTURE["🚀 Future: LLM Pipeline"]
-        style FUTURE fill:#e1f5ff,stroke:#01579b,stroke-width:3px
+    subgraph Serving["🚀 MODEL SERVING"]
+        A1 & A2 --> ML1["model_loader.py<br/>ModelLoader class<br/>• Lazy loading<br/>• Type-safe predict()"]
         
-        LLM["🤖 LLM Orchestration<br/>LangChain + GPT-4"]
-        LLM --> AUG["📝 Data Augmentation<br/>• Paraphrase<br/>• Generate test cases"]
-        LLM --> ACTIVE["🎯 Active Learning<br/>• Flag low confidence<br/>• Human-in-the-loop"]
-        AUG & ACTIVE --> RETRAIN
+        ML1 --> API["api_endpoints.py<br/>FastAPI application"]
+        
+        API --> EP1["/predict/transformation<br/>Binary Relevance endpoint"]
+        API --> EP2["/predict/adaptation<br/>ML-kNN endpoint"]
+        API --> EP3["/metrics<br/>Prometheus metrics"]
+        API --> EP4["/health<br/>Health check"]
+        
+        API --> MON["monitoring.py<br/>PrometheusMiddleware"]
+        MON --> PM["Prometheus Metrics<br/>• http_requests_total<br/>• http_request_duration_seconds<br/>• model_inference_duration_seconds<br/>• model_prediction_confidence<br/>• model_requests_total"]
     end
 
-    style DS fill:#fff3e0,stroke:#e65100
-    style MLFLOW fill:#e8f5e9,stroke:#2e7d32
-    style API fill:#e3f2fd,stroke:#1565c0
-    style PROM fill:#fce4ec,stroke:#c2185b
-    style DOCKER fill:#f3e5f5,stroke:#6a1b9a
+    subgraph Deployment["🐳 DEPLOYMENT"]
+        EP1 & EP2 & EP3 & EP4 --> SRV["serve.py<br/>uvicorn.run(app)"]
+        SRV --> DOC["Dockerfile<br/>• Multi-stage build<br/>• Python 3.10-slim<br/>• Non-root user"]
+        
+        DOC --> DC["docker-compose.yml<br/>3 services:"]
+        DC --> DC1["api:8000<br/>FastAPI app"]
+        DC --> DC2["prometheus:9090<br/>Metrics collector"]
+        DC --> DC3["grafana:3000<br/>Dashboards"]
+        
+        PM --> DC2
+        DC2 --> DC3
+    end
+
+    subgraph Monitoring["📈 MONITORING DASHBOARD"]
+        DC3 --> G1["Grafana Dashboard<br/>movie_genre_dashboard.json"]
+        G1 --> P1["Panel 1:<br/>Request Rate"]
+        G1 --> P2["Panel 2:<br/>Inference Time by Model"]
+        G1 --> P3["Panel 3:<br/>Request Volume by Model"]
+        G1 --> P4["Panel 4:<br/>Avg Prediction Confidence"]
+    end
+
+    subgraph UserInteraction["👤 USER INTERACTION"]
+        USER["API Consumer<br/>(curl, Python, Postman)"]
+        USER -->|POST /predict/transformation| EP1
+        USER -->|POST /predict/adaptation| EP2
+        EP1 & EP2 -->|JSON Response| USER
+    end
+
+    style DS1 fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    style DS2 fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    style DF fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+    style E5 fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+    style A1 fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+    style A2 fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+    style ML fill:#fff9c4,stroke:#f57f17,stroke-width:2px
+    style API fill:#e3f2fd,stroke:#1565c0,stroke-width:2px
+    style PM fill:#fce4ec,stroke:#c2185b,stroke-width:2px
+    style DC fill:#f3e5f5,stroke:#6a1b9a,stroke-width:2px
+    style G1 fill:#e0f2f1,stroke:#00695c,stroke-width:2px
+    style USER fill:#ffebee,stroke:#c62828,stroke-width:2px
