@@ -1,0 +1,49 @@
+{
+  "dashboard": {
+    "title": "Movie Genre Prediction API",
+    "panels": [
+      {
+        "title": "Request Rate (RPS)",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(http_requests_total[1m])",
+            "legendFormat": "Total"
+          }
+        ]
+      },
+      {
+        "title": "Inference Time by Model",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(model_inference_duration_seconds_sum[1m]) / rate(model_inference_duration_seconds_count[1m])",
+            "legendFormat": "{{model_type}}"
+          }
+        ]
+      },
+      {
+        "title": "Request Volume by Model",
+        "type": "barchart",
+        "targets": [
+          {
+            "expr": "sum by (model_type) (rate(model_requests_total[1m]))",
+            "legendFormat": "{{model_type}}"
+          }
+        ]
+      },
+      {
+        "title": "Avg Prediction Confidence",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "avg(model_prediction_confidence)",
+            "legendFormat": "Overall"
+          }
+        ]
+      }
+    ],
+    "refresh": "10s"
+  },
+  "overwrite": true
+}
