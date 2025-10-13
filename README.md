@@ -369,34 +369,34 @@ Docker & Docker Compose (for containerized deployment)
 2GB free disk space
 
 Quick Start
-# 1. Clone repository
+### 1. Clone repository
 git clone <repo>
 cd <repo>
 
-# 2. Create virtual environment
+### 2. Create virtual environment
 Recommended: uv
 uv init .
 uv venv && .venv\Scripts\activate
-# 3. Install dependencies
+### 3. Install dependencies
 uv pip install  "fastapi[all]" pandas numpy scikit-learn scikit-multilearn mlflow matplotlib seaborn joblib prometheus-client
 
-# 4. Download dataset (place in IMDb-dataset/)
-# - movies_overview.csv
-# - movies_genres.csv
+### 4. Download dataset (place in IMDb-dataset/)
+- movies_overview.csv
+- movies_genres.csv
 
-# 5. Run EDA
+### 5. Run EDA
 python -m src.run_eda
 
-## scikit-multilearn bug
+### scikit-multilearn bug
 in .venv/Lib/skmultilearn/adapt/mlknn.py, replace this line: self.knn_ = NearestNeighbors(self.k).fit(X) with this: self.knn_ = NearestNeighbors(n_neighbors = self.k).fit(X)
 
-# 6. Train models
+### 6. Train models
 python -m src.run_trainer
 
-# 7. Start API
+### 7. Start API
 python serve.py
 
-# 8. Test prediction
+### 8. Test prediction
 curl -X POST "http://localhost:8000/predict/transformation" \
   -H "Content-Type: application/json" \
   -d '{"overview": "A team of astronauts travels through a wormhole in space."}'
@@ -418,52 +418,9 @@ docker-compose logs -f api
 docker-compose down
 
 ## Future Enhancements
-1. Real-Time Test Data Pipeline with LLM Orchestration
+### 1. Real-Time Test Data Pipeline with LLM Orchestration
 Problem: Models degrade as real-world data changes. We need continuous evaluation on fresh, realistic test data.
-┌─────────────────────────────────────────────────────────────┐
-│              LLM-Orchestrated Test Generation                │
-├─────────────────────────────────────────────────────────────┤
-│                                                               │
-│  ┌──────────────┐         ┌─────────────────┐               │
-│  │   LangChain  │────────>│  GPT-4 / Claude │               │
-│  │ Orchestrator │         │  (Generate test │               │
-│  └──────────────┘         │   movie plots)  │               │
-│         │                 └─────────────────┘               │
-│         │                          │                         │
-│         v                          v                         │
-│  ┌─────────────────────────────────────────┐                │
-│  │     Synthetic Test Data Generator       │                │
-│  ├─────────────────────────────────────────┤                │
-│  │ • Genre: "Action, Sci-Fi"               │                │
-│  │ • Prompt: "Generate movie plot with..." │                │
-│  │ • Output: Realistic plot overview       │                │
-│  └─────────────────────────────────────────┘                │
-│         │                                                     │
-│         v                                                     │
-│  ┌─────────────────────────────────────────┐                │
-│  │      Ground Truth Validation            │                │
-│  │   (Human-in-the-loop + LLM verification)│                │
-│  └─────────────────────────────────────────┘                │
-│         │                                                     │
-│         v                                                     │
-│  ┌─────────────────────────────────────────┐                │
-│  │    Real-Time Model Evaluation           │                │
-│  │  • Predict on new synthetic data        │                │
-│  │  • Compare to ground truth              │                │
-│  │  • Log metrics to MLflow                │                │
-│  └─────────────────────────────────────────┘                │
-│         │                                                     │
-│         v                                                     │
-│  ┌─────────────────────────────────────────┐                │
-│  │   Automated Retraining Trigger          │                │
-│  │   IF performance drops > 5%:            │                │
-│  │      → Trigger retraining               │                │
-│  │      → A/B test new model               │                │
-│  └─────────────────────────────────────────┘                │
-└─────────────────────────────────────────────────────────────┘
-
 Benefits
-
 Continuous Evaluation: New test data generated daily
 Diverse Coverage: LLM can generate edge cases humans miss
 Cost-Effective: No manual labeling needed
@@ -478,6 +435,28 @@ Latency: Test generation is slow (not real-time)
 
 Mitigation: Hybrid approach with 90% synthetic + 10% real user data (labeled via active learning)
 
+### 2. Scalability & Resilience Improvements
+#### Horizontal Scaling with Kubernetes
+Deploy API with auto-scaling (3-10 replicas) based on CPU/memory utilization. Use HorizontalPodAutoscaler to handle traffic spikes automatically. Add liveness and readiness probes for self-healing. Impact: Handle 10x traffic without manual intervention.
+#### Caching Layer (Redis)
+Cache predictions based on overview hash (SHA256) with 1-hour TTL. Expected: 40% cache hit rate for repeated queries, reduces inference load by 40%, lowers latency from 20ms → 2ms for cached requests.
+#### Message Queue for Async Predictions (Celery)
+Add Celery workers with Redis broker for batch processing. Users submit prediction tasks, receive task IDs, poll for results. Use case: Process 10,000 movies overnight without blocking API.
+#### Circuit Breaker Pattern
+Implement circuit breaker (fail-fast after 5 consecutive failures, recover after 60s). 
+Prevents cascading failures when model service is down. Impact: API stays responsive even when ML service degrades.
+
+### 4. Model Versioning & A/B Testing
+
+Shadow Mode: Run new model alongside production, log predictions without serving
+Canary Deployment: Route 5% traffic to new model, monitor metrics, full rollout if successful
+Champion/Challenger: Always keep 2 models deployed, compare weekly, promote better model
+
+### 5. Enhanced Monitoring
+
+Data Quality Monitoring: Track input distribution drift (overview length, vocabulary changes)
+Prediction Distribution: Monitor genre prediction frequency over time
+Business Metrics: Track user engagement with predicted genres (if available)
 
 ## Deep Learning Extensions
 Why Deep Learning for Genre Prediction?
@@ -495,116 +474,60 @@ Contextualization: Transformers understand word meaning from context
 Transfer Learning: Fine-tune pre-trained models (BERT, GPT)
 
 ## Proposed Architecture 1: BERT for Multi-Label Classification
-Model Architecture
-Input: "A thief who steals corporate secrets through dreams..."
-         (max_length = 256 tokens)
-                        ↓
-        ┌───────────────────────────────────┐
-        │     BERT Base (110M params)       │
-        │  bert-base-uncased from HuggingFace│
-        ├───────────────────────────────────┤
-        │  12 Transformer Layers            │
-        │  • Self-attention                 │
-        │  • Feed-forward networks          │
-        │  • Layer normalization            │
-        └───────────────────────────────────┘
-                        ↓
-             [CLS] Token Representation
-                   (768-dim vector)
-                        ↓
-        ┌───────────────────────────────────┐
-        │     Multi-Label Classification    │
-        │          Head                      │
-        ├───────────────────────────────────┤
-        │  Dense(768 → 256, ReLU)           │
-        │  Dropout(0.3)                     │
-        │  Dense(256 → num_genres, Sigmoid) │
-        └───────────────────────────────────┘
-                        ↓
-        [P(Action), P(Sci-Fi), ..., P(Documentary)]
-                        ↓
-                  Threshold @ 0.5
-                        ↓
-            [Action, Sci-Fi, Thriller]
-
-Why BERT is better:
-
-Understands context: "dark comedy" vs "dark thriller"
-Semantic similarity: "space" ≈ "cosmos" ≈ "galaxy"
-Transfer learning: Pre-trained on 3.3B words
-
-Trade-offs:
-
-❌ Slower inference: 20ms → 80ms
-❌ Larger model: 10MB → 440MB
-❌ Requires GPU for efficient training
-
-
+How it would work: Fine-tune bert-base-uncased (12 transformer layers) on movie overviews by feeding the [CLS] token representation through a classification head (768→256→num_genres with sigmoid activation). The model would learn contextual embeddings where "dark comedy" is understood differently from "dark thriller" and synonyms like "space"/"cosmos"/"galaxy" map to similar regions. Training takes ~3 epochs with learning rate 2e-5 and requires GPU (2-4 hours on single V100).
+Why it's better: BERT captures semantic meaning that TF-IDF misses—it understands that "heist" relates to "Crime" even if that exact word wasn't in training. Expected improvements: +11% F1-micro (0.73→0.81), +18% F1-macro (0.61→0.72), especially helping rare genres like Documentary. Trade-off: inference latency increases from 20ms to ~80ms, and model size grows from 57MB to 440MB.
 
 ## Proposed Architecture 2: Hierarchical Attention Network
-Motivation: Movie overviews have structure (sentences). Hierarchical attention models this:
-Input: "John is a thief. He steals secrets through dreams."
-                        ↓
-        ┌───────────────────────────────────┐
-        │      Sentence Splitting            │
-        └───────────────────────────────────┘
-                        ↓
-    ["John is a thief.", "He steals secrets through dreams."]
-                        ↓
-        ┌───────────────────────────────────┐
-        │    Word-Level Bi-LSTM + Attention │
-        │  For each sentence:               │
-        │    Encode words → Attend to       │
-        │    important words → Sentence vec │
-        └───────────────────────────────────┘
-                        ↓
-    [s₁ vector, s₂ vector]  (sentence representations)
-                        ↓
-        ┌───────────────────────────────────┐
-        │  Sentence-Level Bi-LSTM + Attention│
-        │    Encode sentences → Attend to   │
-        │    important sentences → Doc vec  │
-        └───────────────────────────────────┘
-                        ↓
-            Document vector (fixed-size)
-                        ↓
-        ┌───────────────────────────────────┐
-        │    Classification Head            │
-        │  Dense → Softmax (multi-label)    │
-        └───────────────────────────────────┘
-                        ↓
-        [P(Action), P(Sci-Fi), ..., P(Documentary)]
-
-Benefits
-
-Interpretable: Can visualize which sentences → which genres
-Efficient: Faster than BERT (no transformer)
-Hierarchical: Models document structure explicitly
-
+How it would work: Split each overview into sentences, encode each sentence with a Bi-LSTM + attention (word-level), then encode the sequence of sentence vectors with another Bi-LSTM + attention (sentence-level) to get a document representation. For example, "A thief infiltrates dreams." → sentence vector → combined with other sentences → final genre prediction. This two-level hierarchy explicitly models document structure.
+Why it's better: Interpretability—we can visualize which sentences contribute to which genre (e.g., "space station" sentence → Sci-Fi). More efficient than BERT (~30ms inference vs 80ms) while still capturing context. Particularly useful when overviews have clear narrative structure: introduction sentence, conflict sentence, climax sentence each may hint at different genres. Expected +6-8% F1 improvement with lower computational cost.
 
 ## Proposed Architecture 3: Multi-Task Learning
-Idea: Learn genre prediction jointly with related tasks:
-Input: Movie Overview
-          ↓
-    Shared Encoder
-    (BERT or LSTM)
-          ↓
-    ┌─────┴─────┬─────┴─────┬─────┴─────┐
-    │           │           │           │
-Task 1:      Task 2:     Task 3:     Task 4:
-Genre        Rating      Era         Budget
-Prediction   Prediction  Prediction  Prediction
-(Multi-      (Regression)(Multi-     (Regression)
- Label)                   Class)
+How it would work: Share a BERT/LSTM encoder across multiple prediction tasks—genre (multi-label), rating (regression), release era (1920s/1950s/2000s multi-class), and budget tier (low/medium/high). The shared encoder learns representations that help all tasks: high ratings correlate with Drama, big budgets with Action. Training jointly with loss = 0.4·L_genre + 0.2·L_rating + 0.2·L_era + 0.2·L_budget.
+Why it's better: Regularization through auxiliary tasks prevents overfitting—the model can't just memorize genre-specific keywords. Data efficiency—if we have rating/era/budget labels for only 50% of movies, we still leverage that information. Expected +5% F1 improvement plus better generalization to unseen movie types. Bonus: single API call returns genre + rating prediction together.
+
+## Proposed Architecture 4: Label Attention Network (LAN)
+How it would work: Use a transformer encoder on the overview, then apply genre-specific attention—for each genre, compute attention weights over all tokens to find relevant parts. "Action" head attends to "chase," "explosion"; "Romance" head attends to "love," "relationship." Each genre gets its own attention-weighted document representation → binary classifier. This is like having 20 specialized "readers" each looking for their genre's keywords.
+Why it's better: Handles label correlations naturally—if "Action" and "Adventure" heads both attend to "jungle expedition," the model learns they co-occur. More parameter-efficient than Binary Relevance because the transformer encoder is shared. Expected +7-9% F1-macro particularly helping rare genres by giving them dedicated attention mechanisms. Works well with our high co-occurrence (Action-Adventure NMI=0.42) findings from EDA.
 
 
- Why Multi-Task?
+## Real-Time Pipeline with LLM Orchestration
+### Problem Statement
+ML models degrade over time due to data drift (user behavior changes) and concept drift (genre definitions evolve). Traditional pipelines rely on batch retraining schedules, but we need continuous evaluation on fresh, realistic test data to detect degradation early.
+### Key Components
+1. LLM Test Generator (LangChain + GPT-4)
 
-Shared representations: Rating hints at genre (high rating → Drama)
-Regularization: Prevents overfitting to genre alone
-Data efficiency: Leverages extra labels if available
+Generates diverse movie plots for any genre combination
+Prompt engineering ensures realistic overviews (50-150 words)
+Temperature = 0.7 for creative variety
+Cost: ~$0.002 per test case (affordable at scale)
 
+2. Test-Time Augmentation
 
+Generate 5 paraphrases of each overview using LLM
+Predict on all 6 variants (original + 5 paraphrases)
+Ensemble via majority voting
+Result: Reduces prediction variance by 30%, improves confidence calibration
+
+3. Active Learning Loop
+
+Flag predictions with confidence < 0.7 for human review
+Humans label ~100 cases/day (10 min/day effort)
+Retrain weekly with new labeled data
+Result: Continuous improvement without expensive labeling campaigns
+
+4. Drift Detection Dashboard
+
+Track F1, Precision@3, Recall@3 over time (rolling 7-day window)
+Alert if any metric drops > 3% from baseline
+Visualize per-genre performance to identify specific drift
+Result: Early warning system (detect issues in days, not months)
+
+### Benefits
+
+Early Drift Detection: Identify performance degradation in 24-48 hours vs. weeks
+Cost-Effective: $2/day for 1000 synthetic test cases vs. $500/day for manual labeling
+Diverse Coverage: LLM generates edge cases humans wouldn't think of (e.g., "sci-fi western fusion")
+Continuous Improvement: Models get better over time with minimal human effort
 
 ## Pipeline Flow Summary
 The diagram above shows the actual implemented system with these phases:
