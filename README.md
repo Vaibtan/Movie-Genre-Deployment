@@ -190,12 +190,9 @@ Trivia: "romantic comedy" ≠ "romantic" + "comedy"
 3. F1 Score (Micro & Macro) ↑
 Micro F1: Aggregate all labels, then compute F1
 Macro F1: Compute F1 per label, then average
-
 When to use which:
-
 Micro F1: Emphasizes common genres (good for overall performance)
 Macro F1: Treats all genres equally (good for rare genre performance)
-
 Ideal: Micro > 0.70, Macro > 0.60
 4. Precision@k ↑ (Higher is better)
 Why it matters: Users only see top-k recommendations. We care about precision in those k.
@@ -206,6 +203,7 @@ Ideal: > 0.65 for k=3
 
 
 ## MLOps Pipeline Diagram
+```mermaid
 graph TB
     subgraph Data["🗂️ Data Layer"]
         DS[("📊 IMDb Dataset<br/>movies_overview.csv<br/>movies_genres.csv")]
