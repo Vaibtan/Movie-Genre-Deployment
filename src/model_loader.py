@@ -1,6 +1,6 @@
 import time
 from pathlib import Path
-from typing import List, Tuple, Union
+from typing import List, Optional, Tuple, Union
 
 import joblib
 import numpy as np
@@ -9,22 +9,29 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.multioutput import MultiOutputClassifier
 from skmultilearn.adapt import MLkNN
 
+from custom_mlknn import FixedMLkNN
+from storage_manager import StorageManager
+
 
 class ModelLoader:    
-    def __init__(self, model_path: Path, vectorizer_path: Path, genre_names_path: Path) -> None:
+    def __init__(self, model_path: Path, vectorizer_path: Path, \
+        genre_names_path: Path, storage_manager: Optional[StorageManager] = None) -> None:
         """        
-        Args:
-            model_path: Path to serialized model (.pkl)
-            vectorizer_path: Path to TF-IDF vectorizer (.pkl)
-            genre_names_path: Path to genre names (.txt)            
+        @args:
+            model_path: Path to serialized model
+            vectorizer_path: Path to TF-IDF vectorizer
+            genre_names_path: Path to genre names           
         """
+        if storage_manager:
+            self.ensure_artifacts_available(model_path, vectorizer_path, \
+                genre_names_path, storage_manager)
         if not model_path.exists(): raise FileNotFoundError(f"Model file not found: {model_path}")
         if not vectorizer_path.exists(): raise FileNotFoundError(f"Vectorizer file not found: {vectorizer_path}")
         if not genre_names_path.exists(): raise FileNotFoundError(f"Genre names file not found: {genre_names_path}")
         # Load artifacts
         self.model: Union[MultiOutputClassifier, MLkNN] = joblib.load(model_path)
         self.vectorizer: TfidfVectorizer = joblib.load(vectorizer_path)        
-        with open(genre_names_path, "r", encoding="utf-8") as f:
+        with open(genre_names_path, "r", encoding = "utf-8") as f:
             self.genre_names: List[str] = [line.strip() for line in f.readlines()]
         if not isinstance(self.model, (MultiOutputClassifier, MLkNN)):
             raise ValueError(
@@ -32,7 +39,20 @@ class ModelLoader:
                 "Expected MultiOutputClassifier or MLkNN."
             )        
         # Pre-compute genre name array for fast indexing
-        self._genre_array: npt.NDArray[np.str_] = np.array(self.genre_names)
+        self.genre_array: npt.NDArray[np.str_] = np.array(self.genre_names)
+    
+    # Download artifacts from cloud storage if not available locally
+    @staticmethod
+    def ensure_artifacts_available(model_path: Path, vectorizer_path: Path, \
+        genre_names_path: Path, storage_manager: StorageManager) -> None:
+        artifacts: List[Tuple[Path, str]] = [(model_path, model_path.name), \
+            (vectorizer_path, vectorizer_path.name), (genre_names_path, genre_names_path.name)]
+        for local_path, remote_path in artifacts:
+            if not local_path.exists():
+                downloaded_path: Optional[Path] = storage_manager.load_artifact(remote_path, local_path)
+                if downloaded_path is None:
+                    # Artifact not in cloud, will be caught by validation
+                    pass
     
     # Predict top-k genres for a movie overview
     def predict(self, overview: str, k: int = 3, min_confidence: float = 0.1) -> Tuple[List[str], float, npt.NDArray[np.float64]]:
@@ -52,7 +72,9 @@ class ModelLoader:
         # Get probabilities based on model type
         probas: npt.NDArray[np.float64]
         if isinstance(self.model, MultiOutputClassifier): probas = self.predict_binary_relevance(X)
-        elif isinstance(self.model, MLkNN): probas = self.model.predict_proba(X).toarray()[0]
+        elif (MLkNN is not None and isinstance(self.model, MLkNN)) or \
+             (FixedMLkNN is not None and isinstance(self.model, FixedMLkNN)):
+            probas = self.model.predict_proba(X).toarray()[0]
         else: raise ValueError(f"Unsupported model type: {type(self.model)}")
         # Get top-k indices sorted by confidence
         top_k_indices: npt.NDArray[np.intp] = np.argsort(-probas)[:k]
@@ -79,11 +101,11 @@ class ModelLoader:
     def predict_batch(self, overviews: List[str], k: int = 3, \
         min_confidence: float = 0.1) -> List[Tuple[List[str], float, npt.NDArray[np.float64]]]:
         """
-        Args:
+        @args:
             overviews: List of movie overview texts
             k: Number of top genres to return per overview
             min_confidence: Minimum confidence threshold     
-        Returns:
+        @returns:
             List of tuples, each containing:
             - List of predicted genre names
             - Inference time (for entire batch)
@@ -96,7 +118,9 @@ class ModelLoader:
         if isinstance(self.model, MultiOutputClassifier):
             all_probas: npt.NDArray[np.float64] = np.array([estimator.predict_proba(X)[:, 1] \
                 for estimator in self.model.estimators_]).T
-        elif isinstance(self.model, MLkNN): all_probas = self.model.predict_proba(X).toarray()
+        elif (MLkNN is not None and isinstance(self.model, MLkNN)) or \
+             (FixedMLkNN is not None and isinstance(self.model, FixedMLkNN)):
+            all_probas = self.model.predict_proba(X).toarray()
         else: raise ValueError(f"Unsupported model type: {type(self.model)}")
         # Process each sample
         results: List[Tuple[List[str], float, npt.NDArray[np.float64]]] = []
@@ -116,8 +140,7 @@ class ModelLoader:
                 f"Genre '{genre_name}' not found in model. "
                 f"Available genres: {', '.join(self.genre_names)}"
             )
-        
-        _, _, probas = self.predict(overview, k=len(self.genre_names))
+        _, _, probas = self.predict(overview, k = len(self.genre_names))
         genre_idx: int = self.genre_names.index(genre_name)
         return float(probas[genre_idx])
     
@@ -128,5 +151,7 @@ class ModelLoader:
     @property
     def model_type(self) -> str:
         if isinstance(self.model, MultiOutputClassifier): return "binary_relevance"
-        elif isinstance(self.model, MLkNN): return "ml_knn"
+        elif (MLkNN is not None and isinstance(self.model, MLkNN)) or \
+             (FixedMLkNN is not None and isinstance(self.model, FixedMLkNN)):
+            return "ml_knn"
         else: return "unknown"

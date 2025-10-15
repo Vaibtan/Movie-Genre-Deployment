@@ -288,26 +288,26 @@ Without monitoring, you won't know your model is broken until users complain.
 Prometheus Metrics
 We expose 4 categories of metrics:
 
-1. Request Metrics:
+### 1. Request Metrics:
 
-# Total requests
+#### Total requests
 
 http_requests_total{method="POST", endpoint="/predict/transformation", status="200"}
 
-# Request latency (histogram)
+#### Request latency (histogram)
 
 http_request_duration_seconds{endpoint="/predict/transformation"}
 
-2. Model Inference Metrics:
+### 2. Model Inference Metrics:
 
-# Inference time per model
+#### Inference time per model
 
 model_inference_duration_seconds{model_type="transformation"}
 model_inference_duration_seconds{model_type="adaptation"}
 
-3. Prediction Confidence
+### 3. Prediction Confidence
 
-# Confidence scores per genre
+#### Confidence scores per genre
 
 model_prediction_confidence{model_type="transformation", genre="Action"}
 model_prediction_confidence{model_type="transformation", genre="Sci-Fi"}
@@ -316,9 +316,9 @@ Why it matters:
 Sudden drop in confidence → Model uncertainty (investigate)
 High confidence on rare genres → Potential false positives
 
-4. Request Volume per Model
+### 4. Request Volume per Model
 
-# How many predictions per model
+#### How many predictions per model
 
 model_requests_total{model_type="transformation"}
 model_requests_total{model_type="adaptation"}

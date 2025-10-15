@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import joblib
 import mlflow
@@ -7,19 +7,20 @@ import mlflow.sklearn
 import numpy as np
 import numpy.typing as npt
 import pandas as pd
-from data_loader import load_and_clean_data
-from features import create_label_matrix, vectorize_text
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, f1_score, hamming_loss
 from sklearn.multioutput import MultiOutputClassifier
 from skmultilearn.model_selection import iterative_train_test_split
 
+from data_loader import load_and_clean_data
+from features import create_label_matrix, vectorize_text
 from metrics import precision_at_k, recall_at_k
+from storage_manager import StorageManager
 
 
 def train_binary_relevance(movies_df: pd.DataFrame, genres_df: pd.DataFrame, \
     test_size: float = 0.2, random_state: int = 42, artifact_dir: Path = Path("artifacts"), \
-        max_features: int = 20000, C: float = 1.0) -> Dict[str, float]:
+        max_features: int = 20000, C: float = 1.0, storage_manager: Optional[StorageManager] = None) -> Dict[str, float]:
     """    
     Args:
         movies_df: Movie DataFrame with genre_ids
@@ -34,14 +35,9 @@ def train_binary_relevance(movies_df: pd.DataFrame, genres_df: pd.DataFrame, \
     """
     mlflow.set_experiment("MovieGenre-BinaryRelevance")
     with mlflow.start_run(run_name = "BR-LogisticRegression"):
-        params: Dict[str, object] = {
-            "test_size": test_size,
-            "random_state": random_state,
-            "tfidf_max_features": max_features,
-            "model": "LogisticRegression-OvR",
-            "C": C,
-            "solver": "liblinear",
-        }
+        params: Dict[str, object] = { "test_size": test_size, "random_state": random_state, \
+            "tfidf_max_features": max_features, "model": "LogisticRegression-OvR", \
+                "C": C, "solver": "liblinear" }
         mlflow.log_params(params)
         y: npt.NDArray[np.int_]
         genre_names: List[str]
@@ -97,7 +93,12 @@ def train_binary_relevance(movies_df: pd.DataFrame, genres_df: pd.DataFrame, \
         mlflow.log_artifact(str(model_path))
         mlflow.log_artifact(str(vectorizer_path))
         mlflow.log_artifact(str(genre_names_path))
-        
+        if storage_manager:
+            print(f"\n☁️  Uploading artifacts to cloud storage...")
+            storage_manager.save_artifact(model_path, "binary_relevance_model.pkl")
+            storage_manager.save_artifact(vectorizer_path, "tfidf_vectorizer.pkl")
+            storage_manager.save_artifact(genre_names_path, "genre_names.txt")
+            print(f"✅ Artifacts uploaded successfully")
         print("\n✅ Binary Relevance training complete!")
         print("Metrics:")
         for metric_name, metric_value in metrics.items(): print(f"  {metric_name}: {metric_value:.4f}")

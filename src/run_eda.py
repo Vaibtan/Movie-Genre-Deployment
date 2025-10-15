@@ -18,6 +18,7 @@ from data_loader import load_and_clean_data
 from schema import (AnomalyReport, CoOccurrencePair, EDAResults, GenreStats,
                     ImbalanceMetrics, LabelDensityMetrics, MutualInfoPair,
                     TextStats)
+from storage_manager import StorageManager
 
 
 # Compute Gini coefficient of inequality (0 = perfect equality, 1 = max inequality)
@@ -151,8 +152,8 @@ def create_visualizations(movies_df: pd.DataFrame, genres_df: pd.DataFrame, \
     plt.close()
     print(f"✅ Visualizations saved to {output_dir}")
 
-def run_eda(movies_df: pd.DataFrame, genres_df: pd.DataFrame, \
-    output_path: Optional[Path] = None, create_plots: bool = True) -> EDAResults:
+def run_eda(movies_df: pd.DataFrame, genres_df: pd.DataFrame, output_path: Optional[Path] = \
+    None, create_plots: bool = True, storage_manager: Optional[StorageManager] = None) -> EDAResults:
     print("📊 Running Exploratory Data Analysis...")
     # Basic counts
     n_movies, n_genres = len(movies_df), len(genres_df)
@@ -245,9 +246,20 @@ def run_eda(movies_df: pd.DataFrame, genres_df: pd.DataFrame, \
         with open(output_path, "w", encoding = "utf-8") as f:
             json.dump(report.model_dump(mode = "json"), f, indent = 2)
         print(f"✅ EDA report saved to {output_path}")
+        # Upload to cloud storage if configured
+        if storage_manager:
+            print(f"☁️  Uploading EDA report to cloud storage...")
+            storage_manager.save_artifact(output_path, "eda_report.json")
     
     if create_plots and output_path:
-        create_visualizations(movies_df, genres_df, genre_stats, output_path.parent / "eda_plots")
+        plots_dir: Path = output_path.parent / "eda_plots"
+        create_visualizations(movies_df, genres_df, genre_stats, plots_dir)
+        if storage_manager:
+            print(f"☁️  Uploading EDA plots to cloud storage...")
+            for plot_file in plots_dir.glob("*.png"):
+                rel_path: str = f"eda_plots/{plot_file.name}"
+                storage_manager.save_artifact(plot_file, rel_path)
+            print(f"✅ EDA artifacts uploaded successfully")
     # Print summary
     print(f"\n📈 Summary: {n_movies} movies, {n_genres} genres")
     print(f"  Label Density: {density:.3f}, Cardinality: {cardinality}")
@@ -257,8 +269,15 @@ def run_eda(movies_df: pd.DataFrame, genres_df: pd.DataFrame, \
 def main() -> None:
     data_dir = Path("IMDb-dataset")
     output_dir = Path("artifacts")
+    storage_manager: Optional[StorageManager] = None
+    try:
+        storage_manager = StorageManager.create_from_env()
+    except Exception as e:
+        print(f"⚠️  Cloud storage initialization failed: {e}")
+        print("  Continuing with local storage only...")
     movies_df, genres_df = load_and_clean_data(data_dir / "movies_overview.csv", data_dir / "movies_genres.csv")
     print(f"✅ Cleaned dataset: {len(movies_df)} movies retained.")
-    eda_report: EDAResults = run_eda(movies_df, genres_df, output_path = output_dir / "eda_report.json", create_plots = True)
+    eda_report: EDAResults = run_eda(movies_df, genres_df, output_path = \
+        output_dir / "eda_report.json", create_plots = True, storage_manager = storage_manager)
 
 if __name__ == "__main__": main()
