@@ -7,4 +7,6 @@ artifacts/mlknn_model.pkl
 artifacts/tfidf_vectorizer_mlknn.pkl
 artifacts/tfidf_vectorizer.pkl
 .python-version
-mlflow
+mlruns
+test_s3.py 
+diagnose_s3.py
