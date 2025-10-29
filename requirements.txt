@@ -32,7 +32,7 @@ executing==2.2.1
 fastapi==0.118.3
 fastapi-cli==0.0.13
 fastapi-cloud-cli==0.3.1
-fastmcp==2.12.4
+fastmcp==2.13.0
 flask==3.1.2
 fonttools==4.60.1
 gitdb==4.0.12
