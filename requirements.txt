@@ -72,7 +72,7 @@ matplotlib==3.10.7
 matplotlib-inline==0.1.7
 mcp==1.17.0
 mdurl==0.1.2
-mlflow==3.4.0
+mlflow==3.5.0
 mlflow-skinny==3.4.0
 mlflow-tracing==3.4.0
 more-itertools==10.8.0
