@@ -114,7 +114,7 @@ pyparsing==3.2.5
 pyperclip==1.11.0
 python-dateutil==2.9.0.post0
 python-dotenv==1.1.1
-python-multipart==0.0.20
+python-multipart==0.0.22
 pytz==2025.2
 pywin32==311
 pyyaml==6.0.3
